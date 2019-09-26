@@ -27,6 +27,7 @@ import java.util.Map;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.hadoop.HadoopIllegalArgumentException;
+import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaInfo;
 import org.apache.hadoop.hdfs.server.datanode.fsdataset.FsVolumeSpi;
@@ -108,14 +109,32 @@ class ReplicaMap {
     checkBlockPool(bpid);
     try (AutoCloseableLock l = lock.acquire()) {
       // check inner-maps; each of them will have their own synchronization.
-      for (VolumeReplicaMap inner : innerReplicaMaps.values()) {
-        ReplicaInfo info = inner.get(bpid, blockId);
-        if (info != null) {
-          return info;
+      for (FsVolumeImpl fsVolume : innerReplicaMaps.keySet()) {
+        if (!isProvidedVolume(fsVolume)) {
+          // only search non-provided volumes first
+          VolumeReplicaMap volReplicaMap = innerReplicaMaps.get(fsVolume);
+          ReplicaInfo info = volReplicaMap.get(bpid, blockId);
+          if (info != null) {
+            return info;
+          }
+        }
+      }
+      for (FsVolumeImpl fsVolume : innerReplicaMaps.keySet()) {
+        if (isProvidedVolume(fsVolume)) {
+          VolumeReplicaMap volReplicaMap = innerReplicaMaps.get(fsVolume);
+          ReplicaInfo info = volReplicaMap.get(bpid, blockId);
+          if (info != null) {
+            return info;
+          }
         }
       }
     }
     return null;
+  }
+
+  private boolean isProvidedVolume(FsVolumeImpl volume) {
+    StorageType storageType = volume.getStorageType();
+    return storageType != null && storageType.equals(StorageType.PROVIDED);
   }
 
   /**

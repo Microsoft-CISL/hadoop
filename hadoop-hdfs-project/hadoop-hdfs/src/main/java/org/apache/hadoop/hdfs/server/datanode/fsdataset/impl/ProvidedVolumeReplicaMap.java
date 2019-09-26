@@ -126,8 +126,14 @@ class ProvidedVolumeReplicaMap extends VolumeReplicaMap {
           }
           return cache.get(blockId);
         } catch (ExecutionException e) {
-          LOG.warn("Exception in retrieving ReplicaInfo for block id {}:\n{}",
-                  blockId, e.getMessage());
+          Throwable cause = e.getCause();
+          if (cause != null
+              && cause.getCause() instanceof ReplicaNotFoundException) {
+            LOG.debug(e.getMessage());
+          } else {
+            LOG.warn("Exception in retrieving ReplicaInfo for block id {}:\n{}",
+                blockId, e.getMessage());
+          }
         }
       }
       return null;
