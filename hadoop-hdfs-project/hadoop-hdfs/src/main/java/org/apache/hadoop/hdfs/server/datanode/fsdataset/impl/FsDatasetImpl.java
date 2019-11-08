@@ -626,16 +626,15 @@ class FsDatasetImpl implements FsDatasetSpi<FsVolumeImpl> {
     StorageType storageType = location.getStorageType();
     final FsVolumeImpl fsVolume =
         createFsVolume(sd.getStorageUuid(), sd, config);
-    VolumeReplicaMap tempVolumeMap = new VolumeReplicaMap(
-        new AutoCloseableLock());
+    VolumeReplicaMap tempVolumeMap = null;
     ArrayList<IOException> exceptions = Lists.newArrayList();
 
     for (final NamespaceInfo nsInfo : nsInfos) {
       String bpid = nsInfo.getBlockPoolID();
       try {
         fsVolume.addBlockPool(bpid, config, this.timer);
-        tempVolumeMap.addAll(
-            fsVolume.getVolumeMap(bpid, fsVolume, ramDiskReplicaTracker));
+        tempVolumeMap =
+            fsVolume.getVolumeMap(bpid, fsVolume, ramDiskReplicaTracker);
       } catch (IOException e) {
         LOG.warn("Caught exception when adding " + fsVolume +
             ". Will throw later.", e);
