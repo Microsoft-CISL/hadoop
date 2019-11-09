@@ -179,7 +179,7 @@ public abstract class ProvidedReplica extends ReplicaInfo {
    * @return true if the block URI is contained within the volume URI.
    */
   @VisibleForTesting
-  static boolean containsBlock(URI volumeURI, URI blockURI) {
+  public static boolean containsBlock(URI volumeURI, URI blockURI) {
     if (volumeURI == null && blockURI == null){
       return true;
     }

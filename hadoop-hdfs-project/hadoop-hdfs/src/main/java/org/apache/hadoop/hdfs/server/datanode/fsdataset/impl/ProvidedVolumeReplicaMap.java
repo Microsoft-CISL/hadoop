@@ -29,13 +29,16 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.server.common.FileRegion;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants;
 import org.apache.hadoop.hdfs.server.common.blockaliasmap.BlockAliasMap;
+import org.apache.hadoop.hdfs.server.datanode.ProvidedReplica;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaBuilder;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaInfo;
 import org.apache.hadoop.hdfs.server.datanode.ReplicaNotFoundException;
+import org.apache.hadoop.hdfs.server.datanode.ReplicaRemoteFSMismatchException;
 import org.apache.hadoop.hdfs.server.datanode.metrics.DataNodeMetrics;
 import org.apache.hadoop.util.AutoCloseableLock;
 import org.slf4j.Logger;
@@ -126,8 +129,16 @@ class ProvidedVolumeReplicaMap extends VolumeReplicaMap {
           }
           return cache.get(blockId);
         } catch (ExecutionException e) {
-          LOG.warn("Exception in retrieving ReplicaInfo for block id {}:\n{}",
-                  blockId, e.getMessage());
+          Throwable cause = e.getCause();
+          Throwable nestedCause = cause == null ? null : cause.getCause();
+          if (nestedCause != null &&
+              (nestedCause instanceof ReplicaNotFoundException ||
+                  nestedCause instanceof ReplicaRemoteFSMismatchException)) {
+            LOG.debug(e.getMessage());
+          } else {
+            LOG.warn("Exception in retrieving ReplicaInfo for block id {}:\n{}",
+                blockId, e.getMessage());
+          }
         }
       }
       return null;
@@ -138,6 +149,12 @@ class ProvidedVolumeReplicaMap extends VolumeReplicaMap {
     Optional<FileRegion> region
         = (Optional<FileRegion>) aliasMapReader.resolve(blockId);
     if (region.isPresent()) {
+      Path path = region.get().getProvidedStorageLocation().getPath();
+      if (remoteFS != null &&
+          ! ProvidedReplica.containsBlock(remoteFS.getUri(), path.toUri())) {
+        throw new ReplicaRemoteFSMismatchException();
+      }
+
       return new ReplicaBuilder(
           HdfsServerConstants.ReplicaState.FINALIZED)
           .setFileRegion(region.get())
